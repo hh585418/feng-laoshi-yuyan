@@ -1,0 +1,19 @@
+{
+  "name": "风老师·言语理解 AI 助教",
+  "short_name": "风老师",
+  "description": "风老师言语理解专属 AI 助教：拍照识题/随机出题/薄弱点记忆/错题本/知识点速查/讲义检索",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f3ef",
+  "theme_color": "#1a1c21",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
