@@ -31,7 +31,10 @@ html[data-theme=dark]{
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);
   font-family:"PingFang SC","HarmonyOS Sans SC","MiSans","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,sans-serif;
-  letter-spacing:.01em;-webkit-font-smoothing:antialiased;overflow:hidden;}
+  letter-spacing:.01em;-webkit-font-smoothing:antialiased;overflow:hidden;
+  /* PWA 全屏安全区：顶部给刘海/电量栏让位，避免内容被状态栏盖住 */
+  padding: env(safe-area-inset-top, 0px) 0 0 0;}
+html{-webkit-text-size-adjust:100%}
 button{font-family:inherit;border:none;background:none;color:inherit;cursor:pointer;padding:0}
 button:disabled{opacity:.4;cursor:default}
 input,textarea,select{font-family:inherit;color:inherit}
@@ -39,7 +42,10 @@ input,textarea,select{font-family:inherit;color:inherit}
 ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px}
 
 /* ---- 应用栅格 ---- */
-.app{height:100dvh;height:100vh;width:100%;max-width:1100px;margin:0 auto;position:relative;overflow:hidden}
+/* 高度用 100% 占满整屏（body 已含顶部安全区 padding），彻底消除底部空隙；
+   再以输入栏底部的安全区内边距兜住手势条 */
+.app{height:100%;width:100%;max-width:1100px;margin:0 auto;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.app .chat{flex:1 1 auto}
 /* PWA 独立窗口适配加固：外框不设死宽，内部一律可收缩、不横向挤压 */
 .msg,.bubble,.chat,.ta-wrap,.inputbar,.dr-tabs,.sheet{min-width:0}
 .abtn,.send,.iconbtn{flex-shrink:0}
@@ -212,6 +218,10 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
 .feng-crop-foot{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 8px;color:#c9c6bf}
 .feng-crop-foot button{color:#e8e6e0;font-size:13px;padding:5px 9px;border-radius:8px;background:rgba(255,255,255,.07)}
 .feng-crop-foot .zc{font-size:12px;min-width:38px;text-align:center}
+/* 全屏浮层（抽屉/裁剪器）顶部也让出状态栏 */
+.dr-head{padding-top:calc(12px + env(safe-area-inset-top, 0px))}
+.feng-crop-head{padding-top:calc(9px + env(safe-area-inset-top, 0px))}
+.feng-crop-view{height:calc(62dvh - env(safe-area-inset-top, 0px))}
 @media(max-width:560px){.brand .t2{display:none}.abtn{width:42px}}
 
 /* 桌面时主区加宽留白 */
