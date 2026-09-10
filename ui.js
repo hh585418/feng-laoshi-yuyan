@@ -94,6 +94,26 @@
     });
   }
 
+  // ---------- 最小边长补足（部分 VLM 如 Qwen3-VL 要求边长 > 28） ----------
+  function ensureMinEdge(dataUrl, minEdge) {
+    return new Promise((res) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth, h = img.naturalHeight, m = Math.min(w, h);
+        if (!m || m >= minEdge) return res(dataUrl);
+        const k = minEdge / m;
+        const W = Math.round(w * k), H = Math.round(h * k);
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, 0, 0, W, H);
+        res(c.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => res(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   // ---------- 模糊检测（灰度拉普拉斯方差，保守） ----------
   function detectBlur(dataUrl) {
     return new Promise((res) => {
@@ -273,7 +293,7 @@
 
   const FUI = {
     esc, inlineMd, mdToHtml, parseTags, toast,
-    fileToDataURL, compressDataURL, detectBlur, openCropper
+    fileToDataURL, compressDataURL, detectBlur, openCropper, ensureMinEdge
   };
   globalThis.FUI = FUI;
   if (typeof module !== 'undefined' && module.exports) module.exports = FUI;
