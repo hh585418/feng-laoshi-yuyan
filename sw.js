@@ -3,7 +3,7 @@
    这样每次有更新都能立刻拿到新代码（之前的"缓存优先"导致更新慢一拍）；
    断网时仍可用缓存里的壳，保证离线可用。
    外部模型 API（硅基流动 / DeepSeek / Ollama）一律直连，不缓存。 */
-const VERSION = 'feng-v6';
+const VERSION = 'feng-v7';
 const SHELL = [
   './',
   './index.html',
