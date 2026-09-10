@@ -3,6 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="UTF-8">
+<meta name="app-version" content="v6">
 <meta name="theme-color" content="#1a1c21" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -379,6 +380,7 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
         识图说明：题目图片<b>原图直接发给视觉模型</b>，本应用不调用任何前端 OCR。DeepSeek 文本接口不支持收图时，请在"视觉模型"填支持多模态的模型，或切到本地 Ollama（需装 qwen2.5-vl / llava 等）。<br><br>
         Ollama 跨域：给 Ollama 设环境变量 <b>OLLAMA_ORIGINS=*</b> 后重启，否则浏览器会被拦。
       </div>
+      <div class="hint" id="appVer" style="margin-top:8px"></div>
     </section>
   </div>
 </aside>
