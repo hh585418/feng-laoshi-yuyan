@@ -3,7 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="UTF-8">
-<meta name="app-version" content="v8">
+<meta name="app-version" content="v9">
 <meta name="theme-color" content="#1a1c21" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -346,14 +346,14 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
         </div>
         <div id="onlineFields">
           <label>接口地址</label><input class="field" id="setBase" placeholder="https://api.deepseek.com/v1">
-          <label>文本模型</label><input class="field" id="setModel" placeholder="deepseek-chat">
-          <label>视觉模型（识图用，可留空=用文本模型）</label><input class="field" id="setVl" placeholder="如支持多模态的模型 id，留空则不区分">
+          <label>文本模型</label><input class="field" id="setModel" list="modelList" placeholder="deepseek-chat">
+          <label>视觉模型（识图用，可留空=用文本模型）</label><input class="field" id="setVl" list="modelList" placeholder="如支持多模态的模型 id，留空则不区分">
           <label>API Key</label><input class="field" id="setKey" type="password" placeholder="sk-…（仅保存在本机浏览器）">
         </div>
         <div id="ollamaFields" style="display:none">
           <label>Ollama 地址</label><input class="field" id="setBaseO" placeholder="http://localhost:11434/v1">
-          <label>文本模型</label><input class="field" id="setModelO" placeholder="qwen2.5:7b">
-          <label>视觉模型（识图用）</label><input class="field" id="setVlO" placeholder="qwen2.5-vl:7b 或 llava">
+          <label>文本模型</label><input class="field" id="setModelO" list="modelList" placeholder="qwen2.5:7b">
+          <label>视觉模型（识图用）</label><input class="field" id="setVlO" list="modelList" placeholder="qwen2.5-vl:7b 或 llava">
         </div>
         <div><label>讲解档位</label>
           <div class="seg" id="segDepth">
@@ -379,7 +379,9 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
           </select>
           <div class="hint" style="margin-top:4px">只带最近几条问答的文字（图片不进历史），既能听懂"这题/上题/B 选项"这类指代，token 也可控。</div>
         </div>
+        <datalist id="modelList"></datalist>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost small" id="btnModels">拉取模型列表</button>
           <button class="btn ghost small" id="btnTest">测试连接</button>
           <button class="btn ghost small" id="btnVisionTest">识图自检</button>
           <button class="btn ghost small" id="btnClearChat">清空当前聊天</button>
