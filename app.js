@@ -136,6 +136,26 @@
     return arr.slice(0, n || 2).map((c) => '〔' + FENG.TYPE_OF[c.type] + '·' + c.title + '〕' + c.body + (c.ex ? '（' + c.ex + '）' : '')).join('\n');
   }
 
+  // 组装上文（文字のみ，图片不入历史；按条数 + 总字数双重限幅，控制 token）
+  function buildHistory(skipLast) {
+    const n = Number(cfg.ctxTurns || 0);
+    if (!n) return [];
+    const arr = [];
+    let budget = 2400; // 历史总字数上限
+    for (let i = msgs.length - 1 - (skipLast ? 1 : 0); i >= 0 && arr.length < n; i--) {
+      const m = msgs[i];
+      if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
+      if (m.kind === 'quiz') continue;          // 题目本身太长，不塞历史
+      let t = String(m.text || '').trim();
+      if (!t) continue;                          // 纯图片消息跳过
+      if (t.length > 700) t = t.slice(0, 700) + '…';
+      if (t.length > budget) continue;
+      budget -= t.length;
+      arr.unshift({ role: m.role, text: t });
+    }
+    return arr;
+  }
+
   // ============================ 对话/识图 核心 ============================
   async function streamAnswer(userText, opts) {
     opts = opts || {};
@@ -162,8 +182,10 @@
     let full = '';
     let succeeded = false;
     try {
+      const skipLast = !!(msgs.length && msgs[msgs.length - 1].role === 'user');
+      const hist = buildHistory(skipLast);
       await FLLM.chat({
-        messages: [{ role: 'system', text: sys }, { role: 'user', text: prompt }],
+        messages: [{ role: 'system', text: sys }, ...hist, { role: 'user', text: prompt }],
         image: opts.image, signal: abort.signal,
         onDelta: (d) => { full += d; outEl.innerHTML = FUI.mdToHtml(full); scrollBottom(); },
         onReset: () => { full = ''; outEl.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; }
@@ -436,13 +458,15 @@
     $('#setVlO').value = cfg.ollama.vl || '';
     $('#onlineFields').style.display = cfg.mode === 'ollama' ? 'none' : '';
     $('#ollamaFields').style.display = cfg.mode === 'ollama' ? '' : 'none';
+    if ($('#setCtx')) $('#setCtx').value = String(cfg.ctxTurns == null ? 4 : cfg.ctxTurns);
   }
   function readSettingsFromForm() {
     cfg = FStore.saveCfg({
       mode: cfg.mode,
       online: { base: $('#setBase').value.trim(), model: $('#setModel').value.trim(), vl: $('#setVl').value.trim(), key: $('#setKey').value.trim() },
       ollama: { base: $('#setBaseO').value.trim(), model: $('#setModelO').value.trim(), vl: $('#setVlO').value.trim() },
-      depth: cfg.depth, theme: cfg.theme
+      depth: cfg.depth, theme: cfg.theme,
+      ctxTurns: Number(($('#setCtx') && $('#setCtx').value) || 0)
     });
   }
   async function testNow() {
@@ -468,7 +492,7 @@
       const b = e.target.closest('button'); if (!b) return;
       cfg = FStore.saveCfg({ theme: b.dataset.v }); applyTheme();
     });
-    ['setBase', 'setModel', 'setVl', 'setKey', 'setBaseO', 'setModelO', 'setVlO'].forEach((id) => {
+    ['setBase', 'setModel', 'setVl', 'setKey', 'setBaseO', 'setModelO', 'setVlO', 'setCtx'].forEach((id) => {
       $('#' + id).addEventListener('change', () => { readSettingsFromForm(); });
       $('#' + id).addEventListener('input', () => { readSettingsFromForm(); });
     });
