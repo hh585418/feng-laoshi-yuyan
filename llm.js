@@ -41,7 +41,7 @@
       const url = toImageUrl(image);
       const item = (variant === 'str')
         ? { type: 'image_url', image_url: url }
-        : { type: 'image_url', image_url: { url } };
+        : { type: 'image_url', image_url: { url, detail: 'high' } };   // 硅基流动等支持 detail: low/high/auto
       const content = [{ type: 'text', text }, item];
       if (last >= 0) out.splice(last, 1);
       out.push({ role: 'user', content });
@@ -185,12 +185,15 @@
   // ---------- 识图自检：用 8×8 红色小图探一探接口到底说什么 ----------
   const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGO4Iyf3Hx9mGBkKAO7khcEz5XnsAAAAAElFTkSuQmCC";
   async function visionSelfTest() {
+    const { m } = activeCfg();
+    const model = m.vl || m.model;
+    const where = '［模型 ' + model + ' ｜ 地址 ' + normalizeBase(m.base) + '］';
     const msgs = [{ role: 'user', text: '这张图是什么颜色？只回答一个颜色词。' }];
     try {
       const r = await run(msgs, TINY_PNG, null, undefined);
-      return { ok: true, msg: '识图通道正常（第 ' + r.attempt + ' 种发法成功）｜模型回复：' + String(r.text).slice(0, 40) };
+      return { ok: true, msg: where + ' 识图通道正常（第 ' + r.attempt + ' 种发法成功）｜模型回复：' + String(r.text).slice(0, 40) };
     } catch (e) {
-      return { ok: false, msg: (e && e.message) || '识图自检失败' };
+      return { ok: false, msg: where + ' ' + ((e && e.message) || '识图自检失败') };
     }
   }
 
