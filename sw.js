@@ -1,6 +1,9 @@
-/* 风老师·言语理解 —— Service Worker：壳缓存，让 PWA 首次加载后离线可用。
-   注意：外部模型 API（DeepSeek / Ollama）一律走网络，不做缓存。 */
-const VERSION = 'feng-v5';
+/* 风老师·言语理解 —— Service Worker
+   策略：同源资源一律"网络优先，离线回退缓存"。
+   这样每次有更新都能立刻拿到新代码（之前的"缓存优先"导致更新慢一拍）；
+   断网时仍可用缓存里的壳，保证离线可用。
+   外部模型 API（硅基流动 / DeepSeek / Ollama）一律直连，不缓存。 */
+const VERSION = 'feng-v6';
 const SHELL = [
   './',
   './index.html',
@@ -35,24 +38,17 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // 外部 API 不动
+  if (url.origin !== self.location.origin) return; // 外部 API 直连
 
-  // 页面导航：网络优先，离线回退壳
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req)
-        .then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put('./index.html', copy)); return res; })
-        .catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-  // 静态资源：缓存优先，后台更新（stale-while-revalidate）
   e.respondWith(
-    caches.match(req).then((hit) => {
-      const upd = fetch(req)
-        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })
-        .catch(() => hit);
-      return hit || upd;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(VERSION).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
   );
 });
