@@ -182,6 +182,27 @@
     return { ok: true, msg: (text || '连接成功').slice(0, 60) };
   }
 
+  // ---------- 拉取可用模型列表（GET {base}/models）----------
+  async function listModels(cfgOverride) {
+    const { m, isOllama } = activeCfg(cfgOverride);
+    const base = normalizeBase(m.base).replace(/\/chat\/completions$/, '');
+    const url = base + '/models';
+    const headers = {};
+    if (!isOllama && m.key) headers.Authorization = 'Bearer ' + m.key;
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const info = await readError(res);
+        return { ok: false, msg: '拉取失败(' + res.status + ')：' + (info.msg || info.raw || '').slice(0, 160) };
+      }
+      const j = await res.json();
+      const ids = (j && (j.data || j.models) || []).map((x) => (typeof x === 'string' ? x : (x.id || x.name))).filter(Boolean);
+      return { ok: true, ids };
+    } catch (e) {
+      return { ok: false, msg: friendly.network(isOllama) };
+    }
+  }
+
   // ---------- 识图自检：用 8×8 红色小图探一探接口到底说什么 ----------
   const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAeElEQVR4nO3QsQ0AIAwDwYyS/UdiGViAGkvkXkqTyrraw6v0gHQA0gPSAbg9V/e3BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADxkQAAAAAAAAAAAAAAAAAAAAAAAABeA0wKQHpAuvEABwNSdxUGYD0aAAAAAElFTkSuQmCC";
   async function visionSelfTest() {
@@ -197,6 +218,6 @@
     }
   }
 
-  globalThis.FLLM = { chat, testConnection, normalizeBase, activeCfg, buildMessages, toImageUrl, visionSelfTest };
+  globalThis.FLLM = { chat, testConnection, normalizeBase, activeCfg, buildMessages, toImageUrl, visionSelfTest, listModels };
   if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.FLLM;
 })();
