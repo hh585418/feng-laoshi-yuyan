@@ -98,7 +98,7 @@ node engine-test.js    # 期望：RESULT: 31 passed, 0 failed
 | 现象 | 处理 |
 |---|---|
 | 发送后提示"网络请求失败/连不上 Ollama" | 检查设置里 Key/地址；Ollama 加 `OLLAMA_ORIGINS=*` 重启 |
-| 发图提示"不支持图片输入" | 换支持视觉的模型（本地 `qwen2.5-vl` / `llava` 等） |
+| 发图提示"不支持图片输入" | 换支持视觉的模型（本地 `qwen2.5-vl` / `llava` 等）；或点设置里 **「识图自检」**，把回显的"接口原话"发我以适配该接口格式 |
 | 出题按钮提示先填 Key | 离线请切到"本地 Ollama"模式 |
 | 手机上不能拍照/不能安装 | 部署到 https（Cloudflare/GitHub Pages），不要用局域网 http |
 | 聊天记录/记忆被清 | 数据只存本浏览器；清缓存或换浏览器会丢，属正常隐私边界 |
