@@ -33,6 +33,7 @@
   const CFG_DEFAULT = {
     mode: 'online',            // online | ollama
     depth: 'normal',           // brief | normal | deep
+    ctxTurns: 4,               // 携带上文的最近消息条数（0=关闭）
     theme: 'auto',             // light | dark | auto
     online: { base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vl: '', key: '' },
     ollama: { base: 'http://localhost:11434/v1', model: 'qwen2.5:7b', vl: 'qwen2.5-vl:7b' }
@@ -167,7 +168,7 @@
     const w = weakOrder();
     const top = w.slice(0, 3).map((x) => x.label).join('、') || '暂无明显薄弱项';
     let t = '【学习小结】\n';
-    t += '今天一共作答 ' + s.todayCount + ' 题，答对 ' + s.todayOk + ' 题，正确率 ' + s.todayRateReal + '%。\n';
+    t += '今天一共作答 ' + s.todayCount + ' 题，答对 ' + s.todayOk + ' 题，正确率 ' + s.todayRate + '%。\n';
     if (!s.todayCount) t += '今天还没做题——不妨现在来一组，破题点圈起来就好。\n';
     t += '当前最需要补的是：' + top + '。\n';
     const traps = topTraps(2);
