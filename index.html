@@ -3,7 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="UTF-8">
-<meta name="app-version" content="v7">
+<meta name="app-version" content="v8">
 <meta name="theme-color" content="#1a1c21" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -75,7 +75,7 @@ main{flex:1 1 auto;min-height:0;position:relative;display:flex;flex-direction:co
 @keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 .msg .av{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:2px}
 .msg.user{flex-direction:row-reverse}
-.msg.user .av{background:var(--text);color:var(--bg);order:1}
+.msg.user .av{background:var(--text);color:var(--bg)}
 .msg .av{background:var(--panel);border:1px solid var(--line2);color:var(--text)}
 .bubble{max-width:min(78%,640px);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 13px;font-size:15px;line-height:1.72;box-shadow:var(--shadow);min-width:0;overflow-wrap:break-word}
 .msg.user .bubble{background:var(--text);border-color:var(--text);color:var(--accent-contrast)}
@@ -368,6 +368,16 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
             <button data-v="light">浅色</button>
             <button data-v="dark">深色</button>
           </div>
+        </div>
+        <div><label>携带上文（对话记忆）</label>
+          <select class="field" id="setCtx">
+            <option value="0">关闭（最省 token）</option>
+            <option value="2">最近 2 条消息</option>
+            <option value="4">最近 4 条（推荐）</option>
+            <option value="6">最近 6 条</option>
+            <option value="10">最近 10 条（最连贯、更费 token）</option>
+          </select>
+          <div class="hint" style="margin-top:4px">只带最近几条问答的文字（图片不进历史），既能听懂"这题/上题/B 选项"这类指代，token 也可控。</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn ghost small" id="btnTest">测试连接</button>
