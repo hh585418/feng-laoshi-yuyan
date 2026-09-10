@@ -183,7 +183,7 @@
   }
 
   // ---------- 识图自检：用 8×8 红色小图探一探接口到底说什么 ----------
-  const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGO4Iyf3Hx9mGBkKAO7khcEz5XnsAAAAAElFTkSuQmCC";
+  const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAeElEQVR4nO3QsQ0AIAwDwYyS/UdiGViAGkvkXkqTyrraw6v0gHQA0gPSAbg9V/e3BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADxkQAAAAAAAAAAAAAAAAAAAAAAAABeA0wKQHpAuvEABwNSdxUGYD0aAAAAAElFTkSuQmCC";
   async function visionSelfTest() {
     const { m } = activeCfg();
     const model = m.vl || m.model;
