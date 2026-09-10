@@ -19,6 +19,14 @@
     return { mode: isOllama ? 'ollama' : 'online', m, isOllama };
   }
 
+  // 图片统一成合法 data URL：已经是 data: 开头就直接用，纯 base64 才补前缀。
+  // （曾经因为无条件补前缀，导致 dataURL 被拼成 "data:image/jpeg;base64,data:image/..." 而被接口判为非法图片）
+  function toImageUrl(img) {
+    const s = String(img || '');
+    if (/^data:image\//i.test(s)) return s;
+    return 'data:image/jpeg;base64,' + s;
+  }
+
   // 把 {role,text,image} 列表转成 API messages；有图时把图片附加到最后一个 user 消息
   function buildMessages(list, image) {
     const out = list.map((msg) => {
@@ -32,7 +40,7 @@
       const text = last >= 0 ? out[last].content : '（请以这张题目图片为准讲解）';
       const content = [
         { type: 'text', text },
-        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + image } }
+        { type: 'image_url', image_url: { url: toImageUrl(image) } }
       ];
       if (last >= 0) out.splice(last, 1);
       out.push({ role: 'user', content });
@@ -110,13 +118,17 @@
         const err = new Error(friendly.auth + (msg ? '（' + String(msg).slice(0, 120) + '）' : ''));
         err.code = 'AUTH'; throw err;
       }
-      const isImgErr = hasImage && (res.status === 400 || res.status === 415 || res.status === 404);
-      if (isImgErr) {
-        const err = new Error('识图请求被拒绝——当前模型/接口可能不支持图片输入。' +
-          '可在设置里改填支持视觉的模型（本地 Ollama 如 qwen2.5-vl / llava，或支持多模态的在线模型）。原信息：' + String(msg).slice(0, 160));
+      const raw = String(msg || '');
+      // 只有真正"与图片有关"的报错才判定为不支持视觉，避免把其它 400（模型名、参数、大小）误报成识图问题
+      const visionHint = res.status === 415 ||
+        /image|vision|multimodal|图文|图片|不支持.{0,8}(图|视觉)|content.{0,12}type|invalid.{0,12}content/i.test(raw);
+      if (hasImage && visionHint) {
+        const err = new Error('识图请求被接口拒绝（' + res.status + '）——该端点/模型可能没有开启图片输入。' +
+          '可在设置里改填支持视觉的模型。接口原话：' + (raw ? raw.slice(0, 200) : '（无）'));
         err.code = 'VL_NOT_SUPPORTED'; throw err;
       }
-      const err = new Error('模型接口返回错误（' + res.status + '）' + (msg ? '：' + String(msg).slice(0, 200) : ''));
+      const err = new Error('接口返回错误（' + res.status + '）' + (raw ? '：' + raw.slice(0, 220) : '') +
+        (hasImage ? '\n（这次是带图请求；若你确认模型支持视觉，请把上面这句“接口原话”发我，我按该接口的图片格式做适配。）' : ''));
       err.code = 'HTTP'; throw err;
     }
     return await streamChat(res, onDelta);
@@ -151,6 +163,6 @@
     return { ok: true, msg: (text || '连接成功').slice(0, 60) };
   }
 
-  globalThis.FLLM = { chat, testConnection, normalizeBase, activeCfg };
+  globalThis.FLLM = { chat, testConnection, normalizeBase, activeCfg, buildMessages, toImageUrl };
   if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.FLLM;
 })();
