@@ -226,17 +226,24 @@
         const use = await modalAsk('这张图可能有点糊', '识别的清晰度可能不够，尤其是选项文字。建议重新拍一张对焦清楚的照片。', '仍要用这张', '重新拍');
         if (!use) { pickImage(capture); return; }
       }
+      // 统一成规范 JPEG（≤1280px）；若裁得过窄则补足最小边长（Qwen3-VL 要求边长 > 28）
+      const norm = await FUI.compressDataURL(cropped, 1280, 0.86);
+      let img = norm.data;
+      if (Math.min(norm.w, norm.h) < 32) {
+        img = await FUI.ensureMinEdge(img, 64);
+        FUI.toast('裁剪区域太窄，已自动补足尺寸');
+      }
       const typed = $('#q').value.trim();
       $('#q').value = ''; autoGrow();
-      pushMsg({ role: 'user', image: cropped, text: typed || '帮我读题并精讲（识图）' });
+      pushMsg({ role: 'user', image: img, text: typed || '帮我读题并精讲（识图）' });
       const prompt = typed
         ? typed
         : '请仔细看这张题目图片：先把题干、问法、ABCD 完整准确地读出来（如果有残缺或看不清请先提醒），然后按当前档位走「答题固定流程」给我完整精讲。';
-      const first = await streamAnswer(prompt || '请精讲这张图片的题目', { image: cropped, ragQuery: '' });
+      const first = await streamAnswer(prompt || '请精讲这张图片的题目', { image: img, ragQuery: '' });
       if (!first) {
         // 首次失败：可能是图片偏大/格式受限——自动压小再试一次（760px / 质量 0.7）
         FUI.toast('首次识图失败，正在压缩图片后自动重试一次…');
-        const small = await FUI.compressDataURL(cropped, 760, 0.7);
+        const small = await FUI.compressDataURL(img, 760, 0.7);
         await streamAnswer(prompt || '请精讲这张图片的题目（图片已压缩）', { image: small.data, ragQuery: '' });
       }
     };
