@@ -496,6 +496,18 @@
       $('#' + id).addEventListener('change', () => { readSettingsFromForm(); });
       $('#' + id).addEventListener('input', () => { readSettingsFromForm(); });
     });
+    $('#btnModels').addEventListener('click', async () => {
+      readSettingsFromForm();
+      const msg = $('#cfgMsg');
+      msg.textContent = '正在拉取模型列表…';
+      const r = await FLLM.listModels();
+      if (!r.ok) { msg.textContent = '✗ ' + r.msg; return; }
+      const dl = $('#modelList');
+      dl.innerHTML = r.ids.map((id) => '<option value="' + String(id).replace(/"/g, '') + '"></option>').join('');
+      const vision = r.ids.filter((id) => /vl|vision|omni|vl-|glm-4v|internvl/i.test(id));
+      msg.textContent = '✓ 已拉取 ' + r.ids.length + ' 个模型，点输入框即可下拉选择' +
+        (vision.length ? '\n可识图的候选：' + vision.slice(0, 6).join(' / ') : '');
+    });
     $('#btnTest').addEventListener('click', testNow);
     $('#btnVisionTest').addEventListener('click', async () => {
       readSettingsFromForm();
