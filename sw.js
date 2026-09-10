@@ -1,6 +1,6 @@
 /* 风老师·言语理解 —— Service Worker：壳缓存，让 PWA 首次加载后离线可用。
    注意：外部模型 API（DeepSeek / Ollama）一律走网络，不做缓存。 */
-const VERSION = 'feng-v3';
+const VERSION = 'feng-v4';
 const SHELL = [
   './',
   './index.html',
