@@ -232,7 +232,13 @@
       const prompt = typed
         ? typed
         : '请仔细看这张题目图片：先把题干、问法、ABCD 完整准确地读出来（如果有残缺或看不清请先提醒），然后按当前档位走「答题固定流程」给我完整精讲。';
-      await streamAnswer(prompt || '请精讲这张图片的题目', { image: cropped, ragQuery: '' });
+      const first = await streamAnswer(prompt || '请精讲这张图片的题目', { image: cropped, ragQuery: '' });
+      if (!first) {
+        // 首次失败：可能是图片偏大/格式受限——自动压小再试一次（760px / 质量 0.7）
+        FUI.toast('首次识图失败，正在压缩图片后自动重试一次…');
+        const small = await FUI.compressDataURL(cropped, 760, 0.7);
+        await streamAnswer(prompt || '请精讲这张图片的题目（图片已压缩）', { image: small.data, ragQuery: '' });
+      }
     };
     i.click();
   }
@@ -833,6 +839,8 @@
     regSW();
     installHint();
     renderKB();
+    const vm = document.querySelector('meta[name="app-version"]');
+    if (vm && $('#appVer')) $('#appVer').textContent = '当前版本：' + vm.content + '（若版本号不是最新的，请删除桌面图标后重新添加）';
   }
   function bindQuiz() {
     $('#btnQuiz').addEventListener('click', () => {
