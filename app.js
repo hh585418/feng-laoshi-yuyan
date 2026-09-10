@@ -165,7 +165,8 @@
       await FLLM.chat({
         messages: [{ role: 'system', text: sys }, { role: 'user', text: prompt }],
         image: opts.image, signal: abort.signal,
-        onDelta: (d) => { full += d; outEl.innerHTML = FUI.mdToHtml(full); scrollBottom(); }
+        onDelta: (d) => { full += d; outEl.innerHTML = FUI.mdToHtml(full); scrollBottom(); },
+        onReset: () => { full = ''; outEl.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; }
       });
       const parsed = FUI.parseTags(full);
       const show = parsed.clean || full;
@@ -459,6 +460,13 @@
       $('#' + id).addEventListener('input', () => { readSettingsFromForm(); });
     });
     $('#btnTest').addEventListener('click', testNow);
+    $('#btnVisionTest').addEventListener('click', async () => {
+      readSettingsFromForm();
+      const msg = $('#cfgMsg');
+      msg.textContent = '正在用 8×8 小图自检识图通道（会依次试三种发法）…';
+      const r = await FLLM.visionSelfTest();
+      msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.msg;
+    });
     $('#btnClearChat').addEventListener('click', async () => {
       if (!(await modalAsk('清空当前聊天', '只清空本会话的聊天记录，记忆与错题本保留。', '清空', '取消'))) return;
       msgs = []; await idbPut('session:' + sessionId, msgs); renderAll();
