@@ -30,28 +30,40 @@
   function saveJSON(k, v) { sset(k, JSON.stringify(v)); }
 
   // ---- 配置 ----
+  // 只有两个模型状态：开（走在线 API）/ 关（内置离线引擎兜底，永不依赖本机服务）
   const CFG_DEFAULT = {
-    mode: 'online',            // online | ollama
-    depth: 'normal',           // brief | normal | deep
+    llmOn: false,              // 启用大模型：默认关闭 → 离线引擎
+    depth: 'normal',           // brief | normal | deep（在线=讲解档位，离线=答案详略）
     ctxTurns: 4,               // 携带上文的最近消息条数（0=关闭）
     theme: 'auto',             // light | dark | auto
-    online: { base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vl: '', key: '' },
-    ollama: { base: 'http://localhost:11434/v1', model: 'qwen2.5:7b', vl: 'qwen2.5-vl:7b' }
+    online: { base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', vl: '', key: '' }
   };
+  // 旧配置（mode: online|ollama + ollama 段）迁移到 llmOn 开关，顺手丢掉 ollama 字段
+  function migrate(c) {
+    if (!c || typeof c !== 'object') return c;
+    if (c.llmOn === undefined) {
+      // 老用户升级上来：默认保持"大模型开着"的体验（没填 Key 时仍会自动回退离线引擎）。
+      // 旧版曾主动选过"本地 Ollama"的，则给到关（那个模式已经没有了）。
+      c.llmOn = c.mode === 'ollama' ? false : true;
+    }
+    delete c.mode;
+    delete c.ollama;
+    return c;
+  }
   function getCfg() {
-    const c = loadJSON(LS.cfg, null);
+    const c = migrate(loadJSON(LS.cfg, null));
     if (!c) return JSON.parse(JSON.stringify(CFG_DEFAULT));
     const d = JSON.parse(JSON.stringify(CFG_DEFAULT));
     const m = Object.assign({}, d, c || {});
     m.online = Object.assign({}, d.online, (c && c.online) || {});
-    m.ollama = Object.assign({}, d.ollama, (c && c.ollama) || {});
+    m.llmOn = !!m.llmOn;
     return m;
   }
   function saveCfg(patch) {
     const c = getCfg();
     const merged = Object.assign({}, c, patch);
     if (patch && patch.online) merged.online = Object.assign({}, c.online, patch.online);
-    if (patch && patch.ollama) merged.ollama = Object.assign({}, c.ollama, patch.ollama);
+    migrate(merged);
     saveJSON(LS.cfg, merged);
     return merged;
   }
@@ -235,7 +247,7 @@
   }
 
   globalThis.FStore = {
-    CFG_DEFAULT, getCfg, saveCfg,
+    CFG_DEFAULT, getCfg, saveCfg, migrateCfg: migrate,
     recordAttempt, tagAttempt, recentLog, typeScore, weakOrder, weakReport,
     markMaster, topTraps, clearMemory, dayStats, summaryText, getMem,
     getWB, addWB, patchWB, delWB, exportWB, fmtDate
