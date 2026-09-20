@@ -6,7 +6,13 @@
   if (typeof window === 'undefined') return; // 仅供浏览器
   const $ = (s) => document.querySelector(s);
   const FUI = globalThis.FUI, FStore = globalThis.FStore, FLLM = globalThis.FLLM;
+  const FOFF = globalThis.FOFF;
   const FENG = globalThis.FENG, BANK = globalThis.FENG_BANK || [];
+  // 离线引擎的界面文案（改这一处即可换科目标识）
+  const OFF_TITLE = '离线引擎 · 言语理解智能答疑';
+  const OFF_DEEP_MSG = '当前处于离线模式，联网后可调取大模型进行深度解析。';
+  // 是否该走大模型：开关开着、且填了 Key。任何一步失败都会由调用方退回离线引擎。
+  function llmReady() { return !!cfg.llmOn && !!String(cfg.online.key || '').trim(); }
 
   let cfg = FStore.getCfg();
   let msgs = [];                 // 当前会话消息
@@ -17,6 +23,8 @@
   const recent = [];             // 本会话最近出过的题 id，避免立刻重复
   let rags = [];                 // [{id,name,text}]
   let deferredInstall = null;
+  let msgEls = {};               // mid → {wrap,bub}：离线答案要就地替换掉用户那条消息旁的占位气泡
+  let midSeq = 0;
 
   // ============================ IndexedDB ============================
   function openDB() {
@@ -75,10 +83,11 @@
     }
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
+    if (item.mid) msgEls[(item.role === 'user' ? 'u' : 'a') + item.mid] = { wrap, bub };
     return { wrap, bub };
   }
   function renderAll() {
-    const chat = $('#chat'); chat.innerHTML = '';
+    const chat = $('#chat'); chat.innerHTML = ''; msgEls = {};
     msgs.forEach((m) => addMsgEl(m));
     chat.scrollTop = chat.scrollHeight;
   }
@@ -203,16 +212,29 @@
       outWrap.remove(); // 移除临时流式气泡，改由持久化渲染
       if (opts.onDone) { try { opts.onDone(parsed.tags); } catch (e) {} }
     } catch (e) {
+      // 联网失败 / Key 失效 / 接口报错 —— 一律就地退回内置离线引擎，不让用户白等
+      const offlineQ = userText || '';
       outEl.innerHTML = '';
-      const em = document.createElement('p');
-      em.style.color = '#b0483c';
-      em.textContent = (e && e.message) || '出错了';
-      outEl.appendChild(em);
-      const h = document.createElement('p');
-      h.className = 'cap';
-      h.textContent = '可打开右上「☰ → 设置」检查 API Key / Ollama 是否就绪；识图问题请确认视觉模型支持图片。';
-      outEl.appendChild(h);
+      const note = document.createElement('p');
+      note.className = 'cap';
+      note.textContent = '（' + ((e && e.message) || '大模型调用失败') + '）';
+      outEl.appendChild(note);
+      const off = document.createElement('p');
+      off.className = 'off-tip';
+      off.textContent = OFF_DEEP_MSG;
+      outEl.appendChild(off);
+      const ans = FOFF ? FOFF.answer(offlineQ, cfg.depth) : null;
+      if (ans) {
+        const hd = document.createElement('div');
+        hd.className = 'off-hd';
+        hd.textContent = ans.title;
+        outEl.appendChild(hd);
+        const bd = document.createElement('div');
+        bd.innerHTML = FUI.mdToHtml(ans.body || '');
+        outEl.appendChild(bd);
+      }
       scrollBottom();
+      FUI.toast('已退回离线引擎');
     } finally {
       busy = false;
       abort = null;
@@ -221,17 +243,76 @@
     return succeeded ? full : '';
   }
 
+  // ============================ 离线引擎答疑 ============================
+  // 把答案写进「用户那条消息旁边」的气泡；没有对应气泡时新建一条。
+  function renderOffAnswer(mid, ans) {
+    const slot = mid ? msgEls['u' + mid] : null;
+    let bub, wrap;
+    if (slot) { wrap = slot.wrap; bub = slot.bub; bub.innerHTML = ''; }
+    else {
+      const tb = typingBubble();
+      wrap = tb.wrap; bub = tb.bub; bub.innerHTML = '';
+    }
+    const hd = document.createElement('div');
+    hd.className = 'off-hd';
+    hd.textContent = '⌁ ' + ans.title;
+    bub.appendChild(hd);
+    const bd = document.createElement('div');
+    bd.innerHTML = FUI.mdToHtml(ans.body || '');
+    bub.appendChild(bd);
+    if (ans.kind === 'miss') {
+      const p = document.createElement('p');
+      p.className = 'off-tip';
+      p.textContent = OFF_DEEP_MSG;
+      bub.appendChild(p);
+    }
+    scrollBottom();
+    return wrap;
+  }
+
+  async function sendOffline(text, mid) {
+    busy = true; updateSendUI();
+    const tb = typingBubble();
+    tb.bub.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+    // 本地匹配是同步的，留一帧让用户看见"正在查"，也更像在思考
+    await new Promise((r) => setTimeout(r, 220 + Math.floor(Math.random() * 160)));
+    tb.wrap.remove();
+    let ans;
+    try { ans = FOFF.answer(text, cfg.depth); }
+    catch (e) { ans = { kind: 'miss', title: '离线引擎', body: OFF_DEEP_MSG }; }
+    renderOffAnswer(mid, ans);
+    const item = { role: 'assistant', text: ans.title + '\n\n' + ans.body, mid: mid || '' };
+    msgs.push(item);
+    saveSessionT();
+    busy = false; updateSendUI();
+    return item.text;
+  }
+
+  // 离线：问 + 答一次落盘（非流式，直接出结果）
+  function offlineTurn(userText, askText) {
+    const mid = 'm' + (++midSeq);
+    pushMsg({ role: 'user', text: userText, mid: mid });
+    return sendOffline(askText, mid);
+  }
+
   // 发送文本
   async function onSend() {
     const t = $('#q').value.trim();
     if (!t || busy) return;
     $('#q').value = ''; autoGrow();
-    pushMsg({ role: 'user', text: t });
-    await streamAnswer(t);
+    if (llmReady()) { pushMsg({ role: 'user', text: t }); await streamAnswer(t); return; }
+    await offlineTurn(t, t);
   }
 
-  // 识图
+  // 识图（离线引擎没有视觉能力，直接说明并给出可用的替代路径）
   function pickImage(capture) {
+    if (!llmReady()) {
+      FUI.toast('离线模式下不支持识图，已为你转文字答疑');
+      const typed = $('#q').value.trim();
+      if (typed) { onSend(); return; }
+      offlineTurn('（我想拍一道题问你）', '这道题我看不懂，帮我讲讲');
+      return;
+    }
     const i = document.createElement('input');
     i.type = 'file'; i.accept = 'image/*';
     if (capture) i.setAttribute('capture', capture);
@@ -415,6 +496,17 @@
       '题目如下：\n题干：' + entry.stem + '\n问法：' + entry.ask +
       '\nA.' + entry.opts[0] + '\nB.' + entry.opts[1] + '\nC.' + entry.opts[2] + '\nD.' + entry.opts[3] +
       '\n请按' + ({ brief: '简洁', normal: '标准', deep: '深度精讲' })[cfg.depth] + '档走答题固定流程完整讲解：先给答案，再按我的体系拆行文脉络/破题点，逐项说明对错与所踩的坑，点出考点与避坑，结尾一句收尾。学生答对了也简单复盘 + 点一下易错项。';
+    if (!llmReady()) {
+      // 离线：用本地解析兜底。把题干 + 问法 + 正答一起喂给离线引擎，命中该题型的考点卡片。
+      // 题型提示放开头，保证离线匹配优先命中该题型的考点卡
+      const q = (entry.askNote || FENG.TYPE_OF[entry.type] || '') +
+        '｜这是' + (FENG.TYPE_OF[entry.type] || '') + '题。题目：' + entry.stem + ' ' + (entry.ask || '') +
+        '｜学生选了 ' + letter + '，答案是 ' + entry.ans;
+      offlineTurn('讲讲这道' + (FENG.TYPE_OF[entry.type] || '') + '题（我选了 ' + letter + '，答案 ' + entry.ans + '）', q);
+      currentQ = null;
+      refreshMemoryUI();
+      return;
+    }
     await streamAnswer(prompt, { kb: kbCardsForType(entry.type, 1), ragQuery: entry.stem, prompt,
       onDone: (tags) => {
         if (tags.trap || tags.point) FStore.tagAttempt(attemptId, tags);
@@ -439,32 +531,41 @@
     if (!seg) return;
     seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
   }
+  // 大模型开着但没填 Key 时，界面仍按"离线"呈现——避免用户以为在用大模型
   function updateModeUI() {
-    const on = cfg.mode === 'ollama';
-    $('#modePillTxt').textContent = on ? '本地 Ollama' : '在线 API';
-    $('#modeDot').classList.toggle('on', !on);
-    $('#modePill').title = on ? '本地 Ollama（离线）' : '在线 API（DeepSeek 等）';
-    setSeg('segMode', cfg.mode);
+    const on = llmReady();
+    $('#modePillTxt').textContent = on ? '大模型' : '离线';
+    $('#modeDot').classList.toggle('on', on);
+    $('#modePill').title = on ? '已开启大模型（DeepSeek 等在线接口）'
+      : (cfg.llmOn ? '已开启大模型但没填 API Key，当前走离线引擎' : '离线引擎 · 断网可用');
     fillSettingsFields();
     setSeg('segDepth', cfg.depth);
+    updateOffBar();
+  }
+  // 聊天框顶部的离线状态条
+  function updateOffBar() {
+    const bar = $('#offBar');
+    if (!bar) return;
+    const on = llmReady();
+    bar.hidden = !!on;
+    $('#offBarTxt').textContent = OFF_TITLE;
+    $('#offBarBtn').textContent = cfg.llmOn ? '去填 API Key' : '开启大模型';
   }
   function fillSettingsFields() {
     $('#setBase').value = cfg.online.base;
     $('#setModel').value = cfg.online.model;
     $('#setVl').value = cfg.online.vl || '';
     $('#setKey').value = cfg.online.key || '';
-    $('#setBaseO').value = cfg.ollama.base;
-    $('#setModelO').value = cfg.ollama.model;
-    $('#setVlO').value = cfg.ollama.vl || '';
-    $('#onlineFields').style.display = cfg.mode === 'ollama' ? 'none' : '';
-    $('#ollamaFields').style.display = cfg.mode === 'ollama' ? '' : 'none';
+    $('#onlineFields').style.display = cfg.llmOn ? '' : 'none';
+    $('#swLLM').classList.toggle('on', !!cfg.llmOn);
+    $('#swLLMHint').textContent = cfg.llmOn
+      ? '已开启：走在线 API。Key 失效或断网时自动退回内置离线引擎，随时可用。'
+      : '关闭时使用内置离线引擎，断网也能问、也能出题。';
     if ($('#setCtx')) $('#setCtx').value = String(cfg.ctxTurns == null ? 4 : cfg.ctxTurns);
   }
   function readSettingsFromForm() {
     cfg = FStore.saveCfg({
-      mode: cfg.mode,
       online: { base: $('#setBase').value.trim(), model: $('#setModel').value.trim(), vl: $('#setVl').value.trim(), key: $('#setKey').value.trim() },
-      ollama: { base: $('#setBaseO').value.trim(), model: $('#setModelO').value.trim(), vl: $('#setVlO').value.trim() },
       depth: cfg.depth, theme: cfg.theme,
       ctxTurns: Number(($('#setCtx') && $('#setCtx').value) || 0)
     });
@@ -479,11 +580,18 @@
 
   // 绑定：settings seg & fields（on input 存）
   function bindSettings() {
-    $('#segMode').addEventListener('click', (e) => {
-      const b = e.target.closest('button'); if (!b) return;
-      cfg = FStore.saveCfg({ mode: b.dataset.v });
+    // 唯一的模式开关：开=走在线大模型，关=内置离线引擎
+    $('#swLLM').addEventListener('click', () => {
+      cfg = FStore.saveCfg({ llmOn: !cfg.llmOn });
       updateModeUI();
+      if (cfg.llmOn) {
+        FUI.toast(String(cfg.online.key || '').trim() ? '已开启大模型' : '已开启：请填写 API Key，否则仍走离线引擎');
+        setTimeout(() => { const k = $('#setKey'); if (k && !String(cfg.online.key || '').trim()) k.focus(); }, 60);
+      } else {
+        FUI.toast('已切换到内置离线引擎，断网也能用');
+      }
     });
+    $('#offBarBtn').addEventListener('click', () => openDrawer('settings'));
     $('#segDepth').addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       cfg = FStore.saveCfg({ depth: b.dataset.v }); setSeg('segDepth', cfg.depth);
@@ -492,7 +600,9 @@
       const b = e.target.closest('button'); if (!b) return;
       cfg = FStore.saveCfg({ theme: b.dataset.v }); applyTheme();
     });
-    ['setBase', 'setModel', 'setVl', 'setKey', 'setBaseO', 'setModelO', 'setVlO', 'setCtx'].forEach((id) => {
+    // Key 边打边存，顶部"大模型 / 离线"指示随之刷新
+    $('#setKey').addEventListener('input', () => { readSettingsFromForm(); updateModeUI(); });
+    ['setBase', 'setModel', 'setVl', 'setKey', 'setCtx'].forEach((id) => {
       $('#' + id).addEventListener('change', () => { readSettingsFromForm(); });
       $('#' + id).addEventListener('input', () => { readSettingsFromForm(); });
     });
@@ -607,6 +717,7 @@
   async function askKBTopic(title, card) {
     if (busy) return FUI.toast('风老师正在回复，稍等片刻');
     closeDrawer();
+    if (!llmReady()) { offlineTurn('讲讲「' + title + '」', title + ' ' + (card ? card.body : '') + ' ' + (card ? card.pit : '')); return; }
     const want = card ? '请把知识点「' + card.title + '」讲透，结合我的错误习惯，举1-2个例；别讲成教科书，要有课堂感。' : '帮我讲讲「' + title + '」这个言语知识点。';
     pushMsg({ role: 'user', text: want });
     await streamAnswer(want, { kb: card ? kbCardText(card) : '' });
@@ -698,13 +809,37 @@
     closeDrawer();
     pushMsg({ role: 'user', text: '给我一份今天的学习小结' });
     const txt = FStore.summaryText();
-    pushMsg({ role: 'assistant', text: txt });
-    FUI.toast('已生成学习小结');
+    pushMsg({ role: 'assistant', text: txt }, true);
+    FUI.toast('已生成学习小结（本地统计）');
+  }
+  // 离线复盘：本地按薄弱题型 + 常踩的坑拼建议，不依赖任何接口
+  function offlineReviewText() {
+    const w = FStore.weakOrder();
+    const traps = FStore.topTraps(3);
+    let t = '【离线复盘】\n';
+    if (!w.length) {
+      t += '你还没怎么做过题，薄弱项暂时看不出来。先去点「出题」练两道，我才有数据给你把脉。\n';
+    } else {
+      const top = w[0];
+      t += '当前最该补的是『' + FENG.TYPE_OF[top.key] + '』（错 ' + top.wrong + '/' + top.n + '）。\n';
+      const hit = FOFF.search(FENG.TYPE_OF[top.key], 1)[0];
+      if (hit) t += '先把这条口诀背下来：**' + hit.e.formula + '**\n';
+      t += '下一步：① 打开「知识点速查」搜『' + FENG.TYPE_OF[top.key] + '』把卡看一遍；② 回到「出题」连做 5 道该题型；③ 错题本里把踩坑标签补全，我按标签给你加权。\n';
+    }
+    if (traps.length) t += '最近反复踩的坑：' + traps.map((x) => x.k).join('、') + '——下次见着先停一秒。\n';
+    t += '\n' + OFF_DEEP_MSG;
+    return t;
   }
   async function reviewBtn() {
     if (busy) return FUI.toast('风老师正在回复，稍等片刻');
     closeDrawer();
     const recentWrong = FStore.recentLog(null, 6).filter((x) => !x.ok);
+    if (!llmReady()) {
+      pushMsg({ role: 'user', text: '帮我来一次主动复盘：针对我的薄弱点给学习建议' });
+      const txt = offlineReviewText();
+      pushMsg({ role: 'assistant', text: txt }, true);
+      return;
+    }
     pushMsg({ role: 'user', text: '帮我来一次主动复盘：针对我的薄弱点给学习建议' });
     let prompt = '请帮我做一次"主动复盘"：根据我的薄弱题型与最近的错题，像老师一样给下一步针对性学习建议，语气温柔具体。\n薄弱概况：' + FStore.summaryText();
     if (recentWrong.length) prompt += '\n最近几道错题的题型：' + recentWrong.map((x) => FENG.TYPE_OF[x.type]).join('、');
@@ -814,15 +949,20 @@
   // ============================ 欢迎语 / 输入框 ============================
   function greet() {
     if (msgs.length) return;
-    const hello =
+    const intro =
       '各位同学们，大家好，我是四诗风雅颂（风老师），超格教育的一名言语讲师。\n\n' +
       '我把课堂上讲的东西都带过来了：中心理解、逻辑填空、标题/细节、排序、接语、篇章阅读——\n' +
       '你可以：\n' +
-      '· **拍照/上传**一道不会的题（原图直发视觉模型，不用打字）\n' +
       '· **出题**让我带练（会优先挑你薄弱的题型）\n' +
       '· 在 **知识点速查** 里搜“对策类 / 就近原则 / 偷换时态”\n' +
-      '· 直接把题目粘贴进来，我按“简洁 / 标准 / 深度精讲”给你讲透。\n\n' +
+      '· 直接问我考点，比如“增长率公式”这种问法我也接得住（本地关键词库）。\n\n' +
       '记住一句话：接受选项的不完美，对比择优。咱们开始吧。';
+    const hello = llmReady()
+      ? intro + '\n' +
+        '（已开启大模型：直接粘贴**题目**或**拍照/上传**给我都行，我按“简洁 / 标准 / 深度精讲”给你讲透。）'
+      : intro + '\n' +
+        '（现在是**离线引擎**在工作：断网也能问、也能出题，答案来自内置关键词库与真题库；' +
+        '想让我调大模型做深度解析，点右上 ☰ → 设置 打开「启用大模型」即可。）';
     pushMsg({ role: 'assistant', text: hello });
   }
 
@@ -888,7 +1028,8 @@
   function bindQuiz() {
     $('#btnQuiz').addEventListener('click', () => {
       if (busy) return FUI.toast('风老师正在回复，稍等片刻');
-      if (!cfg.online.key && cfg.mode === 'online') { openDrawer('settings'); return FUI.toast('请先在「设置」填 DeepSeek API Key（在线模式）'); }
+      // 题库打包在本地代码里：离线引擎照样能出题，不需要任何 Key
+      if (cfg.llmOn && !String(cfg.online.key || '').trim()) FUI.toast('没填 Key，出题仍可用（离线题库），讲解走离线引擎');
       openQuizSheet();
     });
   }
