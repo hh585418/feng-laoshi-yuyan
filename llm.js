@@ -1,6 +1,7 @@
 /* ============================================================
    风老师·言语理解 —— LLM 客户端
-   OpenAI 兼容 /chat/completions：在线(DeepSeek等) 与 本地Ollama 双模式。
+   OpenAI 兼容 /chat/completions（DeepSeek 等在线接口），不接任何本机服务。
+   调用方只在「启用大模型」打开时才走这里；任何异常都由调用方降级到离线引擎。
    - 图片直传：content 数组 image_url(dataURL)，不经过任何前端 OCR。
    - 识图自适应：标准格式 → 非流式 → 字符串式 image_url，逐级重试，
      兼容"不支持 图片+流式 混合"或图片字段格式不同的各类网关。
@@ -16,9 +17,7 @@
 
   function activeCfg(cfgOverride) {
     const cfg = cfgOverride || globalThis.FStore.getCfg();
-    const isOllama = cfgOverride ? cfgOverride.mode === 'ollama' : cfg.mode === 'ollama';
-    const m = isOllama ? cfg.ollama : cfg.online;
-    return { mode: isOllama ? 'ollama' : 'online', m, isOllama };
+    return { mode: 'online', m: cfg.online };
   }
 
   // 图片统一成合法 data URL（曾经因为无条件补前缀造成双重前缀 bug）
@@ -94,19 +93,17 @@
   }
 
   const friendly = {
-    network: (isOllama) => isOllama
-      ? '连不上本机 Ollama。请确认 Ollama 已启动；并设置环境变量 OLLAMA_ORIGINS=*（允许网页跨域），或改填对的基础地址。'
-      : '网络请求失败。请检查：API 地址是否填对、网络是否可用；离线时请切到「本地 Ollama」模式。',
-    auth: '鉴权失败：API Key 无效或已过期，请到设置里核对（在线模式）。'
+    network: () => '网络请求失败（可能已断网，或 API 地址填错）。已自动退回内置离线引擎。',
+    auth: () => '鉴权失败：API Key 无效或已过期。已自动退回内置离线引擎，可到设置里核对 Key。'
   };
 
   // ---------- 核心：带重试策略的请求 ----------
   async function run(messages, image, onDelta, signal, onReset) {
-    const { m, isOllama } = activeCfg();
+    const { m } = activeCfg();
     const model = pickModel(m, image);
     const url = normalizeBase(m.base);
     const headers = { 'Content-Type': 'application/json' };
-    if (!isOllama && m.key) headers.Authorization = 'Bearer ' + m.key;
+    if (m.key) headers.Authorization = 'Bearer ' + m.key;
 
     const hasImage = !!image;
     const plan = hasImage
@@ -121,8 +118,8 @@
       try {
         res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
       } catch (e) {
-        const err = new Error(friendly.network(isOllama));
-        err.code = isOllama ? 'OLLAMA_NET' : 'NET';
+        const err = new Error(friendly.network());
+        err.code = 'NET';
         throw err;
       }
       if (res.ok) {
@@ -138,7 +135,7 @@
       const info = await readError(res);
       lastStatus = res.status; lastRaw = info.raw; lastMsg = info.msg;
       if (res.status === 401 || res.status === 403) {
-        const err = new Error(friendly.auth + (lastMsg ? '（' + lastMsg.slice(0, 140) + '）' : ''));
+        const err = new Error(friendly.auth() + (lastMsg ? '（' + lastMsg.slice(0, 140) + '）' : ''));
         err.code = 'AUTH'; throw err;
       }
       // 其余情况继续尝试下一种发法
@@ -164,16 +161,16 @@
 
   // ---------- 连接测试 ----------
   async function testConnection(cfgOverride) {
-    const { m, isOllama } = activeCfg(cfgOverride);
+    const { m } = activeCfg(cfgOverride);
     const url = normalizeBase(m.base);
     const headers = { 'Content-Type': 'application/json' };
-    if (!isOllama && m.key) headers.Authorization = 'Bearer ' + m.key;
+    if (m.key) headers.Authorization = 'Bearer ' + m.key;
     const body = { model: m.model, messages: [{ role: 'user', content: '请只回复四个字：连接成功' }], stream: false, max_tokens: 20 };
     let res;
     try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); }
-    catch (e) { return { ok: false, msg: friendly.network(isOllama) }; }
+    catch (e) { return { ok: false, msg: friendly.network() }; }
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) return { ok: false, msg: friendly.auth };
+      if (res.status === 401 || res.status === 403) return { ok: false, msg: friendly.auth() };
       const info = await readError(res);
       return { ok: false, msg: '接口错误(' + res.status + ')' + (info.msg || info.raw ? '：' + (info.msg || info.raw).slice(0, 160) : '') };
     }
@@ -184,11 +181,11 @@
 
   // ---------- 拉取可用模型列表（GET {base}/models）----------
   async function listModels(cfgOverride) {
-    const { m, isOllama } = activeCfg(cfgOverride);
+    const { m } = activeCfg(cfgOverride);
     const base = normalizeBase(m.base).replace(/\/chat\/completions$/, '');
     const url = base + '/models';
     const headers = {};
-    if (!isOllama && m.key) headers.Authorization = 'Bearer ' + m.key;
+    if (m.key) headers.Authorization = 'Bearer ' + m.key;
     try {
       const res = await fetch(url, { headers });
       if (!res.ok) {
@@ -199,7 +196,7 @@
       const ids = (j && (j.data || j.models) || []).map((x) => (typeof x === 'string' ? x : (x.id || x.name))).filter(Boolean);
       return { ok: true, ids };
     } catch (e) {
-      return { ok: false, msg: friendly.network(isOllama) };
+      return { ok: false, msg: friendly.network() };
     }
   }
 
