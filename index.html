@@ -3,7 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="UTF-8">
-<meta name="app-version" content="v9">
+<meta name="app-version" content="v10">
 <meta name="theme-color" content="#1a1c21" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -97,10 +97,18 @@ main{flex:1 1 auto;min-height:0;position:relative;display:flex;flex-direction:co
 .opt.sel{border-color:var(--text);box-shadow:0 0 0 1px var(--text) inset}
 .opt.wrong{background:var(--soft);border-color:var(--bad);color:inherit}
 .opt.right{border-color:var(--ok)}
+/* ---- 离线引擎回答的抬头 / 提示 ---- */
+.off-hd{font-size:11.5px;color:var(--muted);border-bottom:1px dashed var(--line2);padding-bottom:5px;margin-bottom:7px;letter-spacing:.02em}
+.off-tip{font-size:12px;color:var(--muted);border-left:2px solid var(--line2);padding-left:8px;margin-top:8px}
 .bubble img{max-width:100%;border-radius:10px;display:block;margin:4px 0}
 .bubble .cap{font-size:12px;color:var(--muted)}
 .sysnote{display:flex;justify-content:center;margin:6px 0 14px}
 .sysnote .bub{max-width:88%;font-size:12.5px;color:var(--muted);background:transparent;border:1px dashed var(--line2);border-radius:10px;padding:6px 12px;text-align:center;line-height:1.6}
+/* ---- 离线引擎状态条 ---- */
+.offbar{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:6px 14px;font-size:12px;color:var(--muted);background:var(--chip);border-bottom:1px solid var(--line)}
+.offbar .dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.offbar .lnk{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.offbar .lnk:hover{color:var(--text)}
 .typing{display:inline-flex;gap:4px;padding:4px 2px}
 .typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
 .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
@@ -149,6 +157,15 @@ main{flex:1 1 auto;min-height:0;position:relative;display:flex;flex-direction:co
 .btn.primary{background:var(--text);color:var(--accent-contrast)}
 .btn.ghost{border:1px solid var(--line2);color:var(--text)}
 .btn.small{font-size:12.5px;padding:6px 10px;border-radius:8px;font-weight:500}
+/* ---- 开关 ---- */
+.switch{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px 13px;cursor:pointer}
+.switch .sw-txt{flex:1;min-width:0}
+.switch .sw-t{font-size:14.5px;font-weight:600}
+.switch .sw-s{font-size:12px;color:var(--muted);line-height:1.55;margin-top:2px}
+.switch .sw-box{flex:0 0 auto;width:46px;height:26px;border-radius:99px;background:var(--chip);border:1px solid var(--line2);position:relative;transition:.18s}
+.switch .sw-box i{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--panel);border:1px solid var(--line2);transition:.18s}
+.switch.on .sw-box{background:var(--text);border-color:var(--text)}
+.switch.on .sw-box i{left:22px;background:var(--accent-contrast);border-color:var(--accent-contrast)}
 .hint{font-size:12px;color:var(--muted);line-height:1.6}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:10px}
 .card h4{margin:0 0 4px;font-size:14.5px}
@@ -252,6 +269,11 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
 
   <!-- 聊天 -->
   <main>
+    <!-- 离线引擎状态条（离线模式时显示） -->
+    <div class="offbar" id="offBar" hidden>
+      <span class="dot"></span><span id="offBarTxt">离线引擎 · 言语理解智能答疑</span>
+      <button class="lnk" id="offBarBtn">开启大模型</button>
+    </div>
     <div class="chat" id="chat"></div>
 
     <!-- 底部输入 -->
@@ -338,22 +360,19 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
     <!-- 设置 -->
     <section class="dr-sec" id="sec-settings">
       <div class="kv">
-        <div><label>模型模式</label>
-          <div class="seg" id="segMode">
-            <button data-v="online">在线 API（DeepSeek 等）</button>
-            <button data-v="ollama">本地 Ollama（离线）</button>
+        <div class="switch" id="swLLM">
+          <div class="sw-txt">
+            <div class="sw-t">启用大模型</div>
+            <div class="sw-s" id="swLLMHint">关闭时使用内置离线引擎，断网也能问、也能出题。</div>
           </div>
+          <div class="sw-box"><i></i></div>
         </div>
         <div id="onlineFields">
+          <div class="hint" style="margin-bottom:6px">Key 失效或断网时自动退回内置离线引擎，随时可用。</div>
           <label>接口地址</label><input class="field" id="setBase" placeholder="https://api.deepseek.com/v1">
           <label>文本模型</label><input class="field" id="setModel" list="modelList" placeholder="deepseek-chat">
           <label>视觉模型（识图用，可留空=用文本模型）</label><input class="field" id="setVl" list="modelList" placeholder="如支持多模态的模型 id，留空则不区分">
           <label>API Key</label><input class="field" id="setKey" type="password" placeholder="sk-…（仅保存在本机浏览器）">
-        </div>
-        <div id="ollamaFields" style="display:none">
-          <label>Ollama 地址</label><input class="field" id="setBaseO" placeholder="http://localhost:11434/v1">
-          <label>文本模型</label><input class="field" id="setModelO" list="modelList" placeholder="qwen2.5:7b">
-          <label>视觉模型（识图用）</label><input class="field" id="setVlO" list="modelList" placeholder="qwen2.5-vl:7b 或 llava">
         </div>
         <div><label>讲解档位</label>
           <div class="seg" id="segDepth">
@@ -361,6 +380,7 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
             <button data-v="normal">标准</button>
             <button data-v="deep">深度精讲</button>
           </div>
+          <div class="hint" style="margin-top:4px">开大模型时按此档位讲解；离线时决定离线答案的详略。</div>
         </div>
         <div><label>外观</label>
           <div class="seg" id="segTheme">
@@ -389,8 +409,8 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
         <div id="cfgMsg" class="hint" style="white-space:pre-line"></div>
       </div>
       <div class="hint" style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px">
-        识图说明：题目图片<b>原图直接发给视觉模型</b>，本应用不调用任何前端 OCR。DeepSeek 文本接口不支持收图时，请在"视觉模型"填支持多模态的模型，或切到本地 Ollama（需装 qwen2.5-vl / llava 等）。<br><br>
-        Ollama 跨域：给 Ollama 设环境变量 <b>OLLAMA_ORIGINS=*</b> 后重启，否则浏览器会被拦。
+        <b>离线兜底</b>：关掉上面这个开关，或断网、Key 失效、接口请求失败时，应用会自动切到<b>内置离线引擎</b>——本地关键词匹配库负责答疑，本地题库负责出题，全部打包在代码里，断网刷新也能用。<br><br>
+        <b>识图说明</b>：题目图片<b>原图直接发给视觉模型</b>，本应用不调用任何前端 OCR；离线模式下不支持识图。若接口不支持收图，可在"视觉模型"填一个支持多模态的模型 id。
       </div>
       <div class="hint" id="appVer" style="margin-top:8px"></div>
     </section>
@@ -401,6 +421,7 @@ textarea.q{flex:1;min-width:0;border:none;outline:none;resize:none;background:no
 <script src="bank.js"></script>
 <script src="persona.js"></script>
 <script src="store.js"></script>
+<script src="offline.js"></script>
 <script src="llm.js"></script>
 <script src="ui.js"></script>
 <script src="app.js"></script>
